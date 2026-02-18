@@ -163,15 +163,6 @@ async function sendVendorSuspensionEmail(vendor, reason, isActive = true) {
             <strong>Reason:</strong> ${reason}
           </div>
           <p>You are welcome to re-register with complete information through the Mouthful Foods mobile app.</p>
-          <div style="margin: 30px 0; text-align: center;">
-            <a href="https://mouthfulfoods.com/vendor-registration" 
-               style="background-color: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
-              Register Again
-            </a>
-          </div>
-          <p style="font-size: 14px; color: #666;">
-            Or download the Mouthful Foods app to register as a vendor.
-          </p>
           <p style="font-size: 14px; color: #666; margin-top: 30px;">
             Best regards,<br>
             <strong>Mouthful Foods Admin Team</strong>
@@ -238,6 +229,52 @@ app.post("/api/send-suspension-email", async (req, res) => {
     });
   } catch (error) {
     console.error("Error sending email:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// API endpoint to reject pending vendor and delete from database
+app.post("/api/reject-and-delete-vendor", async (req, res) => {
+  try {
+    const { vendor, reason, userId } = req.body;
+
+    if (!vendor || !vendor.email || !vendor.name) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required vendor information",
+      });
+    }
+
+    if (!reason) {
+      return res.status(400).json({
+        success: false,
+        error: "Reason is required",
+      });
+    }
+
+    // Send rejection email (isActive = false for pending vendors)
+    await sendVendorSuspensionEmail(vendor, reason, false);
+
+    // Delete from Firebase Auth (if userId provided)
+    if (userId && admin.apps.length > 0) {
+      try {
+        await admin.auth().deleteUser(userId);
+        console.log(`✅ Deleted user from Firebase Auth: ${userId}`);
+      } catch (authError) {
+        console.error("⚠️ Error deleting Firebase Auth user:", authError.message);
+        // Continue even if auth deletion fails
+      }
+    }
+
+    res.json({
+      success: true,
+      message: "Vendor rejected, email sent, and user deleted from authentication",
+    });
+  } catch (error) {
+    console.error("Error rejecting vendor:", error);
     res.status(500).json({
       success: false,
       error: error.message,
